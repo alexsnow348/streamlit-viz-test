@@ -26,7 +26,7 @@ To get started with this project, follow these steps:
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/yourusername/streamlit-viz-test.git
+    git clone https://github.com/alexsnow348/streamlit-viz-test.git
     cd streamlit-viz-test
     ```
 
