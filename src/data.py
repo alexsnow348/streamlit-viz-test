@@ -67,7 +67,7 @@ def get_all_folders(path):
 def read_input_source_data():
     # read json data from a file
 
-    json_file_path = "/home/wut/playground/streamlit-viz-test/data/data.json"
+    json_file_path = "data/data.json"
     with open(json_file_path, "r") as f:
         data = json.load(f)
     # transform json data to dataframe

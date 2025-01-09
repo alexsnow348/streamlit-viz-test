@@ -169,6 +169,15 @@ def draw_graph_play_timelapse_inactive(filtered_data, chart_placeholder):
     chart_placeholder.plotly_chart(fig, use_container_width=True)
 
 
+def draw_image(image_placeholder, img, file_name, idx):
+    image_placeholder.image(
+        img,
+        caption=f"Frame: {file_name}, idx: {idx}",
+        use_container_width=True,
+    )
+    return image_placeholder
+
+
 def setup_cell_counting_analtyics_column_timelapse_active(
     col1, col2, images, session_key, folder_selected
 ):
@@ -188,12 +197,7 @@ def setup_cell_counting_analtyics_column_timelapse_active(
 
                 # Update image in the placeholder
                 file_name, img = images[idx]
-                image_placeholder.image(
-                    img,
-                    caption=f"Frame: {file_name}, idx: {idx}",
-                    use_container_width=True,
-                )
-
+                image_placeholder = draw_image(image_placeholder, img, file_name, idx)
                 # Update real-time data
                 st.session_state = generate_real_time_data(
                     session_key,
@@ -207,7 +211,7 @@ def setup_cell_counting_analtyics_column_timelapse_active(
                 # Pause for real-time effect
                 time.sleep(0.5)
             st.session_state.play_timelapse_active = False
-        return chart_placeholder, image_placeholder
+    return chart_placeholder, image_placeholder
 
 
 def main():
@@ -257,13 +261,8 @@ def main():
                 value=st.session_state.current_frame_idx,
                 key="frame_slider",
             )
-        # image_placeholder = col1.empty()
         file_name, img = images[frame_idx]
-        image_placeholder.image(
-            img,
-            caption=f"Frame: {file_name}, idx: {frame_idx}",
-            use_container_width=True,
-        )
+        image_placeholder = draw_image(image_placeholder, img, file_name, frame_idx)
         # filer time info with image name
         image_and_time_info_filtered = [
             item
@@ -276,7 +275,7 @@ def main():
         if image_and_time_info_filtered:
             time_stamp = image_and_time_info_filtered[-1][1]
         else:
-            time_stamp = "00:00:00"
+            time_stamp = pd.Timestamp.now()
 
         filtered_data = st.session_state[session_key][folder_selected][
             st.session_state[session_key][folder_selected]["Time"] <= time_stamp

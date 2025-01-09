@@ -37,7 +37,21 @@ To get started with this project, follow these steps:
 
 3. Run the Streamlit app:
     ```sh
-    streamlit run app.py
+    streamlit run src/app.py
+    ```
+## Docker
+
+1. Build the docker image.
+    ```
+    docker build -t <ml-fronte>:<tag> .
+    ```
+2. Run the docker image.
+    ```
+    docker run -d --name my_container -p <host_port>:<container_port> -v <host_dir>:<container_dir> <image_name>
+    ```
+    Sample:
+    ```
+    docker run -d --rm --name mlfronend -p 8501:8501 -v /data/biolab_arralyze_picture_data:/data/biolab_arralyze_picture_data ml-frontend:v0.0.1
     ```
 
 ## Usage
