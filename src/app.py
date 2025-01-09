@@ -7,6 +7,7 @@ import pandas as pd
 import random
 import json
 
+
 session_key = "real_time_data"
 
 
@@ -145,18 +146,6 @@ with col1:
                 resume_timelapse = st.button("Resume Timelapse")
             with button_col3:
                 stop_timelapse = st.button("Stop Timelapse")
-
-            frame_idx = st.slider(
-                "Select Frame",
-                min_value=0,
-                max_value=len(images) - 1,
-                value=st.session_state.current_frame_idx,
-                key="frame_slider",
-            )
-
-            # Update session state when slider changes
-            if not st.session_state.play_timelapse_active:
-                st.session_state.current_frame_idx = frame_idx
         else:
             st.warning("No images found in the specified folder.")
     else:
@@ -165,7 +154,7 @@ with col1:
 
 # Column 2: Real-Time Line Chart
 with col2:
-    st.subheader("Cell Counting Result ")
+    # st.subheader("Cell Counting Result ")
     chart_placeholder = st.empty()  # Placeholder for the chart
 
     # Handle button interactions
@@ -232,6 +221,17 @@ with col2:
             time.sleep(0.5)
         st.session_state.play_timelapse_active = False
     else:
+        frame_idx = st.slider(
+                "Select Frame",
+                min_value=0,
+                max_value=len(images) - 1,
+                value=st.session_state.current_frame_idx,
+                key="frame_slider",
+            )
+
+            # Update session state when slider changes
+        if not st.session_state.play_timelapse_active:
+            st.session_state.current_frame_idx = frame_idx
         # Display the image based on the slider value
         image_placeholder = col1.empty()
         file_name, img = images[frame_idx]
