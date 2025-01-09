@@ -5,6 +5,17 @@ import time
 import plotly.express as px
 import pandas as pd
 
+# local import
+from data import (
+    generate_real_time_data,
+    get_all_folders,
+    read_input_source_data,
+    get_unique_run_version,
+    get_unique_run_name,
+    get_experimenet_list,
+)
+from action import clear_data
+
 # load the .env file
 from dotenv import load_dotenv
 
@@ -12,9 +23,6 @@ load_dotenv()
 
 # Get the folder path from the environment variable
 IMAGE_FOLDER_PATH = os.getenv("IMAGE_FOLDER_PATH")
-
-from data import generate_real_time_data, get_all_folders, read_input_source_data
-from action import clear_data
 
 
 def setup_initial_session_state():
@@ -45,89 +53,131 @@ def setup_initial_session_state():
     return session_key, col1, col2, st.session_state
 
 
-def main():
-    session_key, col1, col2, st.session_state = setup_initial_session_state()
-    # Column 1: Image Viewer
-    with col1:
-        if os.path.exists(IMAGE_FOLDER_PATH):
-            experiment_list = [
-                "20240529 K562-NK cells purified_Killing Assay (9b33)",
-                "",
-            ]
-            # Add a dropdown to select the folder with the default value as the first folder
-            experiment_selected = st.selectbox(
-                "Select an Experiment", experiment_list, index=0
-            )
-            # Get all the folders in the path
-            experiment_folder_path = os.path.join(
-                IMAGE_FOLDER_PATH, experiment_selected, "v3", "Run 1", "Images"
-            )
-            folders = get_all_folders(experiment_folder_path)
-            with col2:
-                # Add a dropdown to select the folder with the default value as the first folder
-                folder_selected = st.selectbox("Select a Well", folders, index=0)
-                if folder_selected not in st.session_state[session_key]:
-                    st.session_state[session_key][folder_selected] = pd.DataFrame(
-                        columns=["Time", "Cell Type", "Value"]
-                    )
-                    st.session_state[session_key][
-                        f"image_and_time_info_{folder_selected}"
-                    ] = []
+def is_check_folder_path_existed(folder_path):
+    if os.path.exists(folder_path):
+        return True
+    else:
+        return False
 
-            selected_folder_path = os.path.join(
-                experiment_folder_path, folder_selected, "Merged"
-            )
-            # Load images
-            images = []
-            for file_name in sorted(os.listdir(selected_folder_path)):
-                if file_name.endswith((".png", ".jpg", ".jpeg")):
-                    file_path = os.path.join(selected_folder_path, file_name)
-                    images.append((file_name, Image.open(file_path)))
 
-            if images:
-                # # Side-by-side buttons
-                button_col1, button_col2, button_col3 = st.columns(3)
-                with button_col1:
-                    play_timelapse = st.button("Play Timelapse")
-                with button_col2:
-                    resume_timelapse = st.button("Resume Timelapse")
-                with button_col3:
-                    stop_timelapse = st.button("Stop Timelapse")
-            else:
-                st.warning("No images found in the specified folder.")
-        else:
-            st.error(
-                "The specified folder path does not exist. Please enter a valid path."
-            )
+def setup_buttons():
+    # Side-by-side buttons
+    button_col1, button_col2, button_col3 = st.columns(3)
+    with button_col1:
+        play_timelapse = st.button("Play Timelapse")
+    with button_col2:
+        resume_timelapse = st.button("Resume Timelapse")
+    with button_col3:
+        stop_timelapse = st.button("Stop Timelapse")
+    return play_timelapse, resume_timelapse, stop_timelapse
 
-    # Column 2: Real-Time Line Chart
+
+def setup_selectboxes(experiment_list, unique_run_version, unique_run_name, col2):
+    experiment_selected = st.selectbox("Select an Experiment", experiment_list, index=0)
+    run_version_selected = st.selectbox(
+        "Select a Run Version", unique_run_version, index=0
+    )
+    with col2:
+        run_name_selected = st.selectbox("Select a Run Name", unique_run_name, index=0)
+        # Get all the folders in the path
+    experiment_folder_path = os.path.join(
+        IMAGE_FOLDER_PATH,
+        experiment_selected,
+        run_version_selected,
+        run_name_selected,
+        "Images",
+    )
+    folders = get_all_folders(experiment_folder_path)
+    # Add a dropdown to select the folder with the default value as the first folder
+    with col2:
+        folder_selected = st.selectbox("Select a Well", folders, index=0)
+        selected_folder_path = os.path.join(
+            experiment_folder_path, folder_selected, "Merged"
+        )
+    return folder_selected, selected_folder_path
+
+
+def get_images(selected_folder_path):
+    images = []
+    for file_name in sorted(os.listdir(selected_folder_path)):
+        if file_name.endswith((".png", ".jpg", ".jpeg")):
+            file_path = os.path.join(selected_folder_path, file_name)
+            images.append((file_name, Image.open(file_path)))
+    return images
+
+
+def set_default_value_selected_folder(folder_selected, session_key):
+    if folder_selected not in st.session_state[session_key]:
+        st.session_state[session_key][folder_selected] = pd.DataFrame(
+            columns=["Time", "Cell Type", "Value"]
+        )
+        st.session_state[session_key][f"image_and_time_info_{folder_selected}"] = []
+
+
+def update_play_timelapse_active_status(
+    play_timelapse, resume_timelapse, stop_timelapse
+):
+    # Handle button interactions
+    if play_timelapse:
+        st.session_state.play_timelapse_active = True
+        st.session_state.current_frame_idx = 0
+    if stop_timelapse:
+        st.session_state.play_timelapse_active = False
+    if resume_timelapse:
+        st.session_state.play_timelapse_active = True
+
+
+def draw_graph_play_timelapse_active(session_key, folder_selected, chart_placeholder):
+    # Update chart with new data
+    fig = px.line(
+        st.session_state[session_key][folder_selected],
+        x="Time",
+        y="Value",
+        color="Cell Type",
+        title="Cell Counting Result Over Time",
+    )
+
+    # Update layout
+    fig.update_layout(
+        xaxis_title="Time",
+        yaxis_title="Values",
+        legend_title="Cell Type",
+        showlegend=True,
+    )
+
+    # Display the chart in the placeholder
+    chart_placeholder.plotly_chart(fig, use_container_width=True)
+    return chart_placeholder
+
+
+def draw_graph_play_timelapse_inactive(filtered_data, chart_placeholder):
+    # Display the filtered chart
+    fig = px.line(
+        filtered_data,
+        x="Time",
+        y="Value",
+        color="Cell Type",
+    )
+
+    fig.update_layout(
+        xaxis_title="Time",
+        yaxis_title="Values",
+        legend_title="Cell Type",
+        showlegend=True,
+    )
+
+    chart_placeholder.plotly_chart(fig, use_container_width=True)
+
+
+def setup_cell_counting_analtyics_column_timelapse_active(
+    col1, col2, images, session_key, folder_selected
+):
     with col2:
         # st.subheader("Cell Counting Result ")
         chart_placeholder = st.empty()  # Placeholder for the chart
-        frame_idx = st.slider(
-            "Select Frame",
-            min_value=0,
-            max_value=len(images) - 1,
-            value=st.session_state.current_frame_idx,
-            key="frame_slider",
-        )
-        # Handle button interactions
-        if play_timelapse:
-            st.session_state.play_timelapse_active = True
-            st.session_state.current_frame_idx = 0
-            # with button_col1:
-            #     st.write("Timelapse started. To stop, click 'Stop Timelapse'.")
-        if stop_timelapse:
-            st.session_state.play_timelapse_active = False
-
-        if resume_timelapse:
-            st.session_state.play_timelapse_active = True
-            # with button_col2:
-            #     st.write("Timelapse resumed. To stop, click 'Stop Timelapse'.")
+        image_placeholder = col1.empty()
         if st.session_state.play_timelapse_active:
-            # Create placeholders for the image and chart
             image_placeholder = col1.empty()
-
             # Start timelapse and update graph
             for idx in range(st.session_state.current_frame_idx, len(images)):
                 st.session_state.current_frame_idx = idx  # Save the current frame index
@@ -151,72 +201,88 @@ def main():
                     file_name,
                     st.session_state,
                 )
-
-                # Update chart with new data
-                fig = px.line(
-                    st.session_state[session_key][folder_selected],
-                    x="Time",
-                    y="Value",
-                    color="Cell Type",
-                    title="Cell Counting Result Over Time",
+                chart_placeholder = draw_graph_play_timelapse_active(
+                    session_key, folder_selected, chart_placeholder
                 )
-
-                # Update layout
-                fig.update_layout(
-                    xaxis_title="Time",
-                    yaxis_title="Values",
-                    legend_title="Cell Type",
-                    showlegend=True,
-                )
-
-                # Display the chart in the placeholder
-                chart_placeholder.plotly_chart(fig, use_container_width=True)
-
                 # Pause for real-time effect
                 time.sleep(0.5)
             st.session_state.play_timelapse_active = False
-        else:
-            # Display the image based on the slider value
-            image_placeholder = col1.empty()
-            file_name, img = images[frame_idx]
-            image_placeholder.image(
-                img, caption=f"Frame: {file_name}, idx: {frame_idx}", use_container_width=True
-            )
-            # filer time info with image name
-            image_and_time_info_filtered = [
-                item
-                for item in st.session_state[session_key][
-                    f"image_and_time_info_{folder_selected}"
-                ]
-                if item[0] == images[frame_idx][0]
-            ]
+        return chart_placeholder, image_placeholder
 
-            if image_and_time_info_filtered:
-                time_stamp = image_and_time_info_filtered[-1][1]
+
+def main():
+    session_key, col1, col2, st.session_state = setup_initial_session_state()
+    unique_run_version = get_unique_run_version(st.session_state, session_key)
+    unique_run_name = get_unique_run_name(st.session_state, session_key)
+
+    # Column 1: Image Viewer
+    with col1:
+        if is_check_folder_path_existed:
+            experiment_list = get_experimenet_list()
+            # Add a dropdown to select the folder with the default value as the first folder
+            folder_selected, selected_folder_path = setup_selectboxes(
+                experiment_list, unique_run_version, unique_run_name, col2
+            )
+            images = get_images(selected_folder_path)
+            set_default_value_selected_folder(folder_selected, session_key)
+            if images:
+                play_timelapse, resume_timelapse, stop_timelapse = setup_buttons()
             else:
-                time_stamp = "00:00:00"
+                st.warning("No images found in the specified folder.")
+        else:
+            st.error(
+                "The specified folder path does not exist. Please enter a valid path."
+            )
+        update_play_timelapse_active_status(
+            play_timelapse, resume_timelapse, stop_timelapse
+        )
+        # Column 2: Real-Time Line Chart
 
-            filtered_data = st.session_state[session_key][folder_selected][
-                st.session_state[session_key][folder_selected]["Time"] <= time_stamp
+        chart_placeholder, image_placeholder = (
+            setup_cell_counting_analtyics_column_timelapse_active(
+                col1,
+                col2,
+                images,
+                session_key,
+                folder_selected,
+            )
+        )
+    if not st.session_state.play_timelapse_active:
+        with col2:
+            # Display the image based on the slider value
+            frame_idx = st.slider(
+                "Select Frame",
+                min_value=0,
+                max_value=len(images) - 1,
+                value=st.session_state.current_frame_idx,
+                key="frame_slider",
+            )
+        # image_placeholder = col1.empty()
+        file_name, img = images[frame_idx]
+        image_placeholder.image(
+            img,
+            caption=f"Frame: {file_name}, idx: {frame_idx}",
+            use_container_width=True,
+        )
+        # filer time info with image name
+        image_and_time_info_filtered = [
+            item
+            for item in st.session_state[session_key][
+                f"image_and_time_info_{folder_selected}"
             ]
+            if item[0] == images[frame_idx][0]
+        ]
 
-            # Display the filtered chart
-            fig = px.line(
-                filtered_data,
-                x="Time",
-                y="Value",
-                color="Cell Type",
-            )
+        if image_and_time_info_filtered:
+            time_stamp = image_and_time_info_filtered[-1][1]
+        else:
+            time_stamp = "00:00:00"
 
-            fig.update_layout(
-                xaxis_title="Time",
-                yaxis_title="Values",
-                legend_title="Cell Type",
-                showlegend=True,
-            )
-
-            chart_placeholder.plotly_chart(fig, use_container_width=True)
-
+        filtered_data = st.session_state[session_key][folder_selected][
+            st.session_state[session_key][folder_selected]["Time"] <= time_stamp
+        ]
+        draw_graph_play_timelapse_inactive(filtered_data, chart_placeholder)
+    with col2:
         # Button to clear data
         st.button(
             "Clear Data",

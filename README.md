@@ -37,7 +37,7 @@ To get started with this project, follow these steps:
 
 3. Run the Streamlit app:
     ```sh
-    streamlit run app
+    streamlit run app.py
     ```
 
 ## Usage
