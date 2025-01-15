@@ -74,10 +74,7 @@ def setup_buttons():
 def setup_select_boxes(col2, session_key):
     experiment_info = get_experiment_list()
     experiment_list = [experiment["experiment_name"] for experiment in experiment_info]
-    print(experiment_list)
-    experiment_selected = st.selectbox(
-        "Select an Experiment", experiment_list, index=0
-    )
+    experiment_selected = st.selectbox("Select an Experiment", experiment_list, index=0)
     # query the transaction_id from experiment_list when the experiment_selected is selected
     transaction_id = [
         experiment["transaction_id"]
@@ -114,7 +111,10 @@ def setup_select_boxes(col2, session_key):
                 experiment_folder_path, folder_selected, IMAGE_MERGE_FOLDER
             )
         if "source_data" not in st.session_state[session_key]:
-            st.session_state[session_key]["source_data"] = get_source_data_based_on_transaction_id(transaction_id)
+            with st.spinner("Fetching data..."):
+                st.session_state[session_key]["source_data"] = (
+                    get_source_data_based_on_transaction_id(transaction_id)
+                )
 
     else:
         st.warning("No unique details found for the selected experiment.")
@@ -178,7 +178,10 @@ def draw_graph_play_timelapse_active(session_key, folder_selected, chart_placeho
     return chart_placeholder
 
 
-def draw_graph_play_timelapse_inactive(filtered_data, chart_placeholder):
+def draw_graph_play_timelapse_inactive(
+    filtered_data,
+    chart_placeholder
+):
     # Display the filtered chart
     fig = px.line(
         filtered_data,
@@ -206,6 +209,7 @@ def draw_image(image_placeholder, bboxes, class_labels, img, file_name, idx):
     )
     return image_placeholder
 
+
 def draw_image_without_bbox(image_placeholder, img, file_name, idx):
     image_placeholder.image(
         img,
@@ -213,6 +217,7 @@ def draw_image_without_bbox(image_placeholder, img, file_name, idx):
         use_container_width=True,
     )
     return image_placeholder
+
 
 def setup_cell_counting_analytics_column_timelapse_active(
     col1, col2, images, session_key, folder_selected, unique_class_name
@@ -240,7 +245,9 @@ def setup_cell_counting_analytics_column_timelapse_active(
                     unique_class_name,
                     st.session_state,
                 )
-                image_placeholder = draw_image(image_placeholder, bboxes, class_labels, img, file_name, idx)
+                image_placeholder = draw_image(
+                    image_placeholder, bboxes, class_labels, img, file_name, idx
+                )
                 chart_placeholder = draw_graph_play_timelapse_active(
                     session_key, folder_selected, chart_placeholder
                 )
@@ -294,7 +301,9 @@ def main():
                 key="frame_slider",
             )
         file_name, img = images[frame_idx]
-        image_placeholder = draw_image_without_bbox(image_placeholder, img, file_name, frame_idx)
+        image_placeholder = draw_image_without_bbox(
+            image_placeholder, img, file_name, frame_idx
+        )
         # filer time info with image name
         image_and_time_info_filtered = [
             item
@@ -303,16 +312,22 @@ def main():
             ]
             if item[0] == images[frame_idx][0]
         ]
-
         if image_and_time_info_filtered:
-            time_stamp = image_and_time_info_filtered[-1][1]
+            file_name, time_stamp, bbox_results, class_labels = (
+                image_and_time_info_filtered[0]
+            )
+            draw_image(image_placeholder, bbox_results, class_labels, img, file_name, frame_idx)
         else:
             time_stamp = pd.Timestamp.now()
-
         filtered_data = st.session_state[session_key][folder_selected][
-            st.session_state[session_key][folder_selected]["Time"] <= time_stamp
-        ]
-        draw_graph_play_timelapse_inactive(filtered_data, chart_placeholder)
+                st.session_state[session_key][folder_selected]["Time"] <= time_stamp
+            ]
+        draw_graph_play_timelapse_inactive(
+                filtered_data,
+                chart_placeholder,
+
+            )
+
     with col2:
         # Button to clear data
         st.button(

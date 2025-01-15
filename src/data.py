@@ -56,13 +56,13 @@ def generate_real_time_data(
         }
     new_df_test = pd.DataFrame(new_data_test_dict)
     updated_data = pd.concat([existing_data, new_df_test])
-    existing_image_and_time_info.append((file_name, new_time_stamp))
+    bbox_results = new_data_test["bbox_results"]
+    class_labels = new_data_test["class_name_results"]
+    existing_image_and_time_info.append((file_name, new_time_stamp, bbox_results, class_labels))
     session_state[session_key][folder_selected] = updated_data
     session_state[session_key][
             f"image_and_time_info_{folder_selected}"
         ] = existing_image_and_time_info
-    bbox_results = new_data_test["bbox_results"]
-    class_labels = new_data_test["class_name_results"]
     return session_state, bbox_results, class_labels
 
 
