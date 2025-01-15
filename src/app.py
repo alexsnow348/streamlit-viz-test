@@ -9,10 +9,9 @@ import pandas as pd
 from data import (
     generate_real_time_data,
     get_all_folders,
-    read_input_source_data,
-    get_unique_run_version,
-    get_unique_run_name,
-    get_experimenet_list,
+    get_source_data_based_on_transaction_id,
+    get_unique_details,
+    get_experiment_list,
 )
 from action import clear_data
 
@@ -23,6 +22,7 @@ load_dotenv()
 
 # Get the folder path from the environment variable
 IMAGE_FOLDER_PATH = os.getenv("IMAGE_FOLDER_PATH")
+IMAGE_MERGE_FOLDER = os.getenv("IMAGE_MERGE_FOLDER")
 
 
 def setup_initial_session_state():
@@ -32,15 +32,13 @@ def setup_initial_session_state():
         layout="wide",  # Use wide layout for full-width display
     )
     # Streamlit app
-    st.title("Cell Counting Timelapse Viewer with Interactive Line Chart")
+    st.title("Cell Counting Image Viewer")
 
     session_key = "real_time_data"
 
     # Initialize session state variables
     if session_key not in st.session_state:
         st.session_state[session_key] = {}
-    if "source_data" not in st.session_state[session_key]:
-        st.session_state[session_key]["source_data"] = read_input_source_data()
 
     if "play_timelapse_active" not in st.session_state:
         st.session_state.play_timelapse_active = False
@@ -72,29 +70,56 @@ def setup_buttons():
     return play_timelapse, resume_timelapse, stop_timelapse
 
 
-def setup_selectboxes(experiment_list, unique_run_version, unique_run_name, col2):
-    experiment_selected = st.selectbox("Select an Experiment", experiment_list, index=0)
-    run_version_selected = st.selectbox(
-        "Select a Run Version", unique_run_version, index=0
+def setup_select_boxes(col2, session_key):
+    experiment_info = get_experiment_list()
+    experiment_list = [experiment["experiment_name"] for experiment in experiment_info]
+    print(experiment_list)
+    experiment_selected = st.selectbox(
+        "Select an Experiment", experiment_list, index=0
     )
-    with col2:
-        run_name_selected = st.selectbox("Select a Run Name", unique_run_name, index=0)
-        # Get all the folders in the path
-    experiment_folder_path = os.path.join(
-        IMAGE_FOLDER_PATH,
-        experiment_selected,
-        run_version_selected,
-        run_name_selected,
-        "Images",
-    )
-    folders = get_all_folders(experiment_folder_path)
-    # Add a dropdown to select the folder with the default value as the first folder
-    with col2:
-        folder_selected = st.selectbox("Select a Well", folders, index=0)
-        selected_folder_path = os.path.join(
-            experiment_folder_path, folder_selected, "Merged"
+    # query the transaction_id from experiment_list when the experiment_selected is selected
+    transaction_id = [
+        experiment["transaction_id"]
+        for experiment in experiment_info
+        if experiment["experiment_name"] == experiment_selected
+    ][0]
+    unique_details = get_unique_details(transaction_id)
+    if unique_details:
+        unique_run_version = unique_details["run_version"]
+        unique_run_name = unique_details["run_name"]
+        unique_class_name = unique_details["result_class_name"]
+        run_version_selected = st.selectbox(
+            "Select a Run Version",
+            unique_run_version,
+            index=len(unique_run_version) - 1,
         )
-    return folder_selected, selected_folder_path
+        with col2:
+            run_name_selected = st.selectbox(
+                "Select a Run Name", unique_run_name, index=len(unique_run_name) - 1
+            )
+            # Get all the folders in the path
+        experiment_folder_path = os.path.join(
+            IMAGE_FOLDER_PATH,
+            experiment_selected,
+            run_version_selected,
+            run_name_selected,
+            "Images",
+        )
+        folders = get_all_folders(experiment_folder_path)
+        # Add a dropdown to select the folder with the default value as the first folder
+        with col2:
+            folder_selected = st.selectbox("Select a Well", folders, index=0)
+            selected_folder_path = os.path.join(
+                experiment_folder_path, folder_selected, IMAGE_MERGE_FOLDER
+            )
+        if "source_data" not in st.session_state[session_key]:
+            st.session_state[session_key]["source_data"] = get_source_data_based_on_transaction_id(transaction_id)
+
+    else:
+        st.warning("No unique details found for the selected experiment.")
+        folder_selected = None
+        selected_folder_path = None
+    return folder_selected, selected_folder_path, unique_class_name, transaction_id
 
 
 def get_images(selected_folder_path):
@@ -170,6 +195,7 @@ def draw_graph_play_timelapse_inactive(filtered_data, chart_placeholder):
 
 
 def draw_image(image_placeholder, img, file_name, idx):
+
     image_placeholder.image(
         img,
         caption=f"Frame: {file_name}, idx: {idx}",
@@ -178,8 +204,8 @@ def draw_image(image_placeholder, img, file_name, idx):
     return image_placeholder
 
 
-def setup_cell_counting_analtyics_column_timelapse_active(
-    col1, col2, images, session_key, folder_selected
+def setup_cell_counting_analytics_column_timelapse_active(
+    col1, col2, images, session_key, folder_selected, unique_class_name
 ):
     with col2:
         # st.subheader("Cell Counting Result ")
@@ -194,7 +220,6 @@ def setup_cell_counting_analtyics_column_timelapse_active(
                 # Check if playback is stopped
                 if not st.session_state.play_timelapse_active:
                     break
-
                 # Update image in the placeholder
                 file_name, img = images[idx]
                 image_placeholder = draw_image(image_placeholder, img, file_name, idx)
@@ -203,6 +228,7 @@ def setup_cell_counting_analtyics_column_timelapse_active(
                     session_key,
                     folder_selected,
                     file_name,
+                    unique_class_name,
                     st.session_state,
                 )
                 chart_placeholder = draw_graph_play_timelapse_active(
@@ -216,16 +242,12 @@ def setup_cell_counting_analtyics_column_timelapse_active(
 
 def main():
     session_key, col1, col2, st.session_state = setup_initial_session_state()
-    unique_run_version = get_unique_run_version(st.session_state, session_key)
-    unique_run_name = get_unique_run_name(st.session_state, session_key)
-
     # Column 1: Image Viewer
     with col1:
         if is_check_folder_path_existed:
-            experiment_list = get_experimenet_list()
             # Add a dropdown to select the folder with the default value as the first folder
-            folder_selected, selected_folder_path = setup_selectboxes(
-                experiment_list, unique_run_version, unique_run_name, col2
+            folder_selected, selected_folder_path, unique_class_name, transaction_id = (
+                setup_select_boxes(col2, session_key)
             )
             images = get_images(selected_folder_path)
             set_default_value_selected_folder(folder_selected, session_key)
@@ -241,14 +263,14 @@ def main():
             play_timelapse, resume_timelapse, stop_timelapse
         )
         # Column 2: Real-Time Line Chart
-
         chart_placeholder, image_placeholder = (
-            setup_cell_counting_analtyics_column_timelapse_active(
+            setup_cell_counting_analytics_column_timelapse_active(
                 col1,
                 col2,
                 images,
                 session_key,
                 folder_selected,
+                unique_class_name,
             )
         )
     if not st.session_state.play_timelapse_active:
