@@ -61,7 +61,9 @@ def generate_real_time_data(
     session_state[session_key][
             f"image_and_time_info_{folder_selected}"
         ] = existing_image_and_time_info
-    return session_state
+    bbox_results = new_data_test["bbox_results"]
+    class_labels = new_data_test["class_name_results"]
+    return session_state, bbox_results, class_labels
 
 
 # get unique values from run_version column from the source data

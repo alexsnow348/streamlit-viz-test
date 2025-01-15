@@ -4,6 +4,7 @@ import os
 import time
 import plotly.express as px
 import pandas as pd
+import cv2
 
 # local import
 from data import (
@@ -13,7 +14,7 @@ from data import (
     get_unique_details,
     get_experiment_list,
 )
-from action import clear_data
+from action import clear_data, draw_detection
 
 # load the .env file
 from dotenv import load_dotenv
@@ -127,7 +128,9 @@ def get_images(selected_folder_path):
     for file_name in sorted(os.listdir(selected_folder_path)):
         if file_name.endswith((".png", ".jpg", ".jpeg")):
             file_path = os.path.join(selected_folder_path, file_name)
-            images.append((file_name, Image.open(file_path)))
+            img = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            images.append((file_name, img))
     return images
 
 
@@ -194,8 +197,8 @@ def draw_graph_play_timelapse_inactive(filtered_data, chart_placeholder):
     chart_placeholder.plotly_chart(fig, use_container_width=True)
 
 
-def draw_image(image_placeholder, img, file_name, idx):
-
+def draw_image(image_placeholder, bboxes, class_labels, img, file_name, idx):
+    image = draw_detection(img, bboxes, class_labels)
     image_placeholder.image(
         img,
         caption=f"Frame: {file_name}, idx: {idx}",
@@ -203,6 +206,13 @@ def draw_image(image_placeholder, img, file_name, idx):
     )
     return image_placeholder
 
+def draw_image_without_bbox(image_placeholder, img, file_name, idx):
+    image_placeholder.image(
+        img,
+        caption=f"Frame: {file_name}, idx: {idx}",
+        use_container_width=True,
+    )
+    return image_placeholder
 
 def setup_cell_counting_analytics_column_timelapse_active(
     col1, col2, images, session_key, folder_selected, unique_class_name
@@ -222,15 +232,15 @@ def setup_cell_counting_analytics_column_timelapse_active(
                     break
                 # Update image in the placeholder
                 file_name, img = images[idx]
-                image_placeholder = draw_image(image_placeholder, img, file_name, idx)
                 # Update real-time data
-                st.session_state = generate_real_time_data(
+                st.session_state, bboxes, class_labels = generate_real_time_data(
                     session_key,
                     folder_selected,
                     file_name,
                     unique_class_name,
                     st.session_state,
                 )
+                image_placeholder = draw_image(image_placeholder, bboxes, class_labels, img, file_name, idx)
                 chart_placeholder = draw_graph_play_timelapse_active(
                     session_key, folder_selected, chart_placeholder
                 )
@@ -284,7 +294,7 @@ def main():
                 key="frame_slider",
             )
         file_name, img = images[frame_idx]
-        image_placeholder = draw_image(image_placeholder, img, file_name, frame_idx)
+        image_placeholder = draw_image_without_bbox(image_placeholder, img, file_name, frame_idx)
         # filer time info with image name
         image_and_time_info_filtered = [
             item
